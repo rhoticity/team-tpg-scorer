@@ -32,7 +32,7 @@ guild_id = 851583874768044052
 channel_id = 1360751870381129868
 start_messages = [("your teammate and decide what photos you are submitting", "rhoticity")]
 
-loc_coords = 41.819915, -92.343759
+loc_coords = 38.579908, -104.309111
 
 def get_messages():
   headers = {
@@ -368,10 +368,6 @@ for message in messages:
     coords = parse_coords(message_content)
   if len(message['attachments']) > 0 or has_image_embed(message) or len(message_snapshots) > 0 or len(stickers) > 0:
     pic_link = f"https://discord.com/channels/{guild_id}/{channel_id}/{message['id']}"
-  for mention in mentions:
-    if mention['id'] == player_id:
-        continue
-    other_player_name = get_player_name(mention)
   if coords is not None and pic_link is not None:
     mapped_name = get_player_name(message['author'])
 
