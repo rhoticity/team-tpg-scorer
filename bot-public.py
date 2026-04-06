@@ -31,6 +31,7 @@ ASSETS_DIR = BASE_DIR
 guild_id = 851583874768044052
 channel_id = 1360751870381129868
 start_messages = ["your teammate and decide what photos you are submitting"]
+start_users = ["pencilvulture", "rhoticity"]
 
 loc_coords = 38.579908, -104.309111
 start_messages.append(f"{loc_coords[0]}, {loc_coords[1]}")
@@ -54,10 +55,11 @@ def get_messages():
 
     for m in json.loads(r.text):
       last_message_id = m['id']
-      if all(start_message.lower() in m['content'].lower() for start_message in start_messages)
-        found_start_message = True
-      elif start_message[0].lower() in m['content'].lower():
-        messages = []
+      if m['author']['username'] in start_users:
+        if all(start_message.lower() in m['content'].lower() for start_message in start_messages):
+          found_start_message = True
+        elif start_message[0].lower() in m['content'].lower():
+          messages = []
 
       if found_start_message:
         break
