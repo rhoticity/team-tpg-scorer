@@ -58,7 +58,7 @@ def get_messages():
       if m['author']['username'] in start_users:
         if all(start_message.lower() in m['content'].lower() for start_message in start_messages):
           found_start_message = True
-        elif start_message[0].lower() in m['content'].lower():
+        elif start_messages[0].lower() in m['content'].lower():
           messages = []
 
       if found_start_message:
