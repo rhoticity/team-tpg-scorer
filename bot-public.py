@@ -40,12 +40,12 @@ def get_messages():
   headers = {
     "Authorization" : "REDACTED"
   }
-  found_start_message = False
+  found_start_messages = False
   messages = []
   params = {}
   last_message_id = None
 
-  while not found_start_message:
+  while not found_start_messages:
     if last_message_id is not None:
       params['before'] = last_message_id
     r = requests.get(f"https://discord.com/api/v10/channels/{channel_id}/messages", headers=headers, params=params)
@@ -56,12 +56,12 @@ def get_messages():
     for m in json.loads(r.text):
       last_message_id = m['id']
       if m['author']['username'] in start_users:
-        if all(start_message.lower() in m['content'].lower() for start_message in start_messages):
-          found_start_message = True
-        elif start_message[0].lower() in m['content'].lower():
+        if all(start_messages.lower() in m['content'].lower() for start_messages in start_messages):
+          found_start_messages = True
+        elif start_messages[0].lower() in m['content'].lower():
           messages = []
 
-      if found_start_message:
+      if found_start_messages:
         break
       else:
         messages.append(m)
