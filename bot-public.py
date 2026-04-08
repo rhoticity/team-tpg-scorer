@@ -63,6 +63,7 @@ def get_messages():
     r = requests.get(f"https://discord.com/api/v10/channels/{channel_id}/messages", headers=headers, params=params)
     print("status:", r.status_code)
     print("body:", r.text[:500])
+    r.raise_for_status()
     time.sleep(1)
 
     for m in json.loads(r.text):
@@ -98,6 +99,7 @@ def get_messages_historic(start_message_id, end_message_id):
     r = requests.get(f"https://discord.com/api/v10/channels/{channel_id}/messages", headers=headers, params=params)
     print("status:", r.status_code)
     print("body:", r.text[:500])
+    r.raise_for_status()
     time.sleep(1)
 
     batch = json.loads(r.text)
