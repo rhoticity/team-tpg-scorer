@@ -91,10 +91,16 @@ def get_messages_historic(start_message_id, end_message_id):
   headers = {
     "Authorization" : "REDACTED"
   }
+  found_start_message = False
   messages = []
-  params = {"after": start_message_id, "limit": 100}
+  params = {}
+  # Use end_message_id + 1 as a numeric upper bound so the first 'before' request
+  # includes end_message_id itself. Discord's 'before' filter is a numeric comparison
+  # on the snowflake value and does not require the ID to correspond to a real message.
+  last_message_id = str(int(end_message_id) + 1)
 
-  while True:
+  while not found_start_message:
+    params['before'] = last_message_id
     r = requests.get(f"https://discord.com/api/v10/channels/{channel_id}/messages", headers=headers, params=params)
     print("status:", r.status_code)
     print("body:", r.text[:500])
@@ -105,14 +111,13 @@ def get_messages_historic(start_message_id, end_message_id):
       break
 
     for m in batch:
-      if int(m['id']) <= int(end_message_id):
-        messages.append(m)
+      last_message_id = m['id']
+      if int(m['id']) <= int(start_message_id):
+        found_start_message = True
+        break
+      messages.append(m)
 
-    last_id = batch[-1]['id']
-    if int(last_id) >= int(end_message_id):
-      break
-
-    params['after'] = last_id
+  messages.reverse()
 
   with open('messages.json', 'w', encoding='utf-8') as f:
     json.dump(messages, f, ensure_ascii=False, indent=2)
