@@ -36,6 +36,18 @@ start_users = ["pencilvulture", "rhoticity"]
 loc_coords = 38.579908, -104.309111
 start_messages.append(f"{loc_coords[0]}, {loc_coords[1]}")
 
+def prompt_mode():
+  """Prompt the user to select scoring mode: 'auto' or 'historic'."""
+  print("Select scoring mode:")
+  print("  auto     - automatically detect the current round from Discord")
+  print("  historic - specify start/end message IDs for a historical round")
+  while True:
+    mode = input("Enter mode (auto/historic): ").strip().lower()
+    if mode in ("auto", "historic"):
+      return mode
+    print("Invalid mode. Please enter 'auto' or 'historic'.")
+
+
 def get_messages():
   headers = {
     "Authorization" : "REDACTED"
@@ -67,6 +79,40 @@ def get_messages():
         messages.append(m)
 
   messages.reverse()
+
+  with open('messages.json', 'w', encoding='utf-8') as f:
+    json.dump(messages, f, ensure_ascii=False, indent=2)
+
+  return messages
+
+
+def get_messages_historic(start_message_id, end_message_id):
+  """Fetch messages between start_message_id (exclusive) and end_message_id (inclusive)."""
+  headers = {
+    "Authorization" : "REDACTED"
+  }
+  messages = []
+  params = {"after": start_message_id, "limit": 100}
+
+  while True:
+    r = requests.get(f"https://discord.com/api/v10/channels/{channel_id}/messages", headers=headers, params=params)
+    print("status:", r.status_code)
+    print("body:", r.text[:500])
+    time.sleep(1)
+
+    batch = json.loads(r.text)
+    if not batch:
+      break
+
+    for m in batch:
+      if int(m['id']) <= int(end_message_id):
+        messages.append(m)
+
+    last_id = batch[-1]['id']
+    if int(last_id) >= int(end_message_id):
+      break
+
+    params['after'] = last_id
 
   with open('messages.json', 'w', encoding='utf-8') as f:
     json.dump(messages, f, ensure_ascii=False, indent=2)
@@ -328,7 +374,13 @@ midpoints = []
 
 messages = []
 
-messages = get_messages()
+scoring_mode = prompt_mode()
+if scoring_mode == "historic":
+  start_id = input("Enter the start message ID (round start message): ").strip()
+  end_id = input("Enter the end message ID (round end message): ").strip()
+  messages = get_messages_historic(start_id, end_id)
+else:
+  messages = get_messages()
 
 player_name = None
 player_id = None
