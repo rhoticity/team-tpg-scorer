@@ -351,6 +351,11 @@ with suppress(FileNotFoundError):
   with open('player_map.json', 'r', encoding='utf-8') as f:
     player_name_map = json.load(f)
 
+corrections = {}
+with suppress(FileNotFoundError):
+  with open('corrections.json', 'r', encoding='utf-8') as f:
+    corrections = json.load(f)
+
 
 def get_player_name(player):
   global_name = player['global_name']
@@ -425,6 +430,11 @@ for message in messages:
       combined_name = f'{player_name},{other_player_name}'
     else:
       combined_name = f'{other_player_name},{player_name}'
+
+    if player_name in corrections:
+      coords[0] = corrections[player_name]
+    elif other_player_name in corrections:
+      coords[1] = corrections[other_player_name]
 
     for pm in midpoints:
       pm_name = str(pm.name)
