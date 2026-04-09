@@ -570,7 +570,6 @@ submission_reminder_string = "Submission reminders:"
 #       if p not in player_name_map or player_name_map[p].strip().lower() not in players_set:
 #         submission_reminder_string += " " + f"<@{p}>"
 
-submission_reminder_string = ""
 with suppress(FileNotFoundError):
   with open("player_list.txt", "r") as f:
     tpg_players = f.read()
@@ -591,4 +590,3 @@ with suppress(FileNotFoundError):
         submission_reminder_string += " " + f"<@{player_id}>"
 
 print(submission_reminder_string)
-print("If you would like to be added to the submission reminders list reacc to this message")
