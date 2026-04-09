@@ -433,7 +433,7 @@ for message in messages:
 
     if player_name in corrections:
       coords[0] = corrections[player_name]
-    elif other_player_name in corrections:
+    if other_player_name in corrections:
       coords[1] = corrections[other_player_name]
 
     for pm in midpoints:
