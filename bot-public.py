@@ -389,28 +389,20 @@ else:
 
 player_name = None
 player_id = None
-new_player_id = None
-coords = None
-pic_link = None
 added_placemark = False
 no_placemarks = []
-other_player_name = ''
 ind_submissions_map = {}
 for message in messages:
-  if player_id is None:
-    player_id = message['author']['id']
-    player_name = message['author']['username']
-  new_player_id = message['author']['id']
-  if new_player_id != player_id:
-    if not added_placemark:
-      no_placemarks.append(player_name)
-      print(f"---------------------------------\nNo placemark added for {player_name}\n---------------------------------")
-    player_id = new_player_id
-    player_name = message['author']['username']
-    coords = None
-    pic_link = None
-    added_placemark = False
-    other_player_name = ''
+  if player_name and not added_placemark:
+    no_placemarks.append(player_name)
+    print(f"---------------------------------\nNo placemark added for {player_name}\n---------------------------------")
+
+  added_placemark = False
+  coords = None
+  pic_link = None
+  other_player_name = None
+  player_id = message['author']['id']
+  player_name = get_player_name(message['author'])
   message_content = message['content']
   message_snapshots = message.get('message_snapshots', [])
   stickers = message.get('sticker_items', [])
@@ -418,24 +410,21 @@ for message in messages:
   if not message_content and len(message_snapshots) > 0:
     message_content = message_snapshots[0]['message']['content']
 
-  if not other_player_name:
-    for mention in mentions:
-      if mention['id'] == player_id:
-        continue
-      other_player_name = get_player_name(mention)
+  for mention in mentions:
+    if mention['id'] == player_id:
+      continue
+    other_player_name = get_player_name(mention)
 
-  if coords is None:
+  if other_player_name is not None:
     coords = parse_coords(message_content)
   if len(message['attachments']) > 0 or has_image_embed(message) or len(message_snapshots) > 0 or len(stickers) > 0:
     pic_link = f"https://discord.com/channels/{guild_id}/{channel_id}/{message['id']}"
   if coords is not None and pic_link is not None:
-    mapped_name = get_player_name(message['author'])
-
     combined_name = ''
-    if mapped_name < other_player_name:
-      combined_name = f'{mapped_name},{other_player_name}'
+    if player_name < other_player_name:
+      combined_name = f'{player_name},{other_player_name}'
     else:
-      combined_name = f'{other_player_name},{mapped_name}'
+      combined_name = f'{other_player_name},{player_name}'
 
     for pm in midpoints:
       pm_name = str(pm.name)
@@ -446,7 +435,7 @@ for message in messages:
 
     ind_submissions_map[combined_name] = (
       KML.Placemark(
-          KML.name(mapped_name),
+          KML.name(player_name),
           KML.description(pic_link),
           KML.styleUrl(),
           KML.Point(
@@ -469,7 +458,6 @@ for message in messages:
         KML.Point(
           KML.coordinates(f"{midpoint[1]},{midpoint[0]},0"))
         ))
-
 
     time.sleep(1)
 
