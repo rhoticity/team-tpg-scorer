@@ -18,7 +18,7 @@ import re
 
 degrees_char = u'\N{DEGREE SIGN}'
 
-geolocator = ArcGIS()
+geolocator = ArcGIS(timeout=10)
 
 # Base directory for all files (script directory)
 BASE_DIR = pathlib.Path(__file__).resolve().parent
