@@ -258,9 +258,9 @@ def parse_coords(message_string):
       return None
     return (a, b)
   
-  for raw in potential_coord_strings:
+  for s in potential_coord_strings:
     # Fast path: numeric coordinate pair already present (don't geocode)
-    numeric = _try_parse_numeric_latlon(raw)
+    numeric = _try_parse_numeric_latlon(s)
     if numeric is not None:
       results.append(numeric)
       if len(results) == 2:
@@ -268,19 +268,34 @@ def parse_coords(message_string):
       continue
     
     # Skip obvious non-coordinate strings
-    if '.' not in raw and degrees_char not in raw:
+    if '.' not in s and degrees_char not in s:
       continue
-    
-    # Clean to a geocoder-friendly string
-    cleaned = raw.strip()
-    cleaned = ''.join(filter(is_coord_char, cleaned))
-    if not cleaned or len(cleaned) < 5:
+
+    s = ''.join(filter(is_coord_char, s))
+
+    s = s.replace("- ", "")
+
+    if s.count(')') == 1:
+      s = s.split(')')[0]
+
+    s = s.strip(" .:(),\n")
+    if s.count(',') == 1:
+      (lat, lon) = s.split(',')
+      s = f'{lon},{lat}'.strip()
+    elif s.count(',') == 0 and s.count(' ') == 1:
+      (lat, lon) = s.split(' ')
+      s = f'{lon},{lat}'
+
+    if s.count('(') == 1:
+      s = s.split('(')[1]
+
+    if len(s) < 10:
       continue
     
     # Try geocode parsing
     result_coords = None
     try:
-      result_coords = geolocator.geocode(cleaned)
+      result_coords = geolocator.geocode(s)
     except Exception as e:
       print(f"Failed parsing {cleaned}: {e}")
     
