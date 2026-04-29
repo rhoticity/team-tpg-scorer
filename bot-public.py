@@ -243,10 +243,6 @@ def parse_coords(message_string):
   print(f'potential_coord_strings: {potential_coord_strings}')
   results = []
   
-  # Retry policy for geocoder fallbacks (avoid infinite hangs)
-  MAX_GEOCODE_RETRIES = 5
-  GEOCODE_RETRY_SLEEP_SECONDS = 1.5
-  
   def _try_parse_numeric_latlon(s):
     """Parse 'lat, lon' from a string. Returns (lat, lon) or None."""
     m = re.search(r'(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)', s)
@@ -281,18 +277,14 @@ def parse_coords(message_string):
     if not cleaned or len(cleaned) < 5:
       continue
     
-    # Bounded geocode retry loop
+    # Try geocode parsing
     result_coords = None
-    for attempt in range(1, MAX_GEOCODE_RETRIES + 1):
-      try:
-        result_coords = geolocator.geocode(cleaned)
-        break
-      except Exception as e:
-        print(f"Failed parsing {cleaned} (attempt {attempt}/{MAX_GEOCODE_RETRIES}): {e}")
-        time.sleep(GEOCODE_RETRY_SLEEP_SECONDS)
+    try:
+      result_coords = geolocator.geocode(cleaned)
+    except Exception as e:
+      print(f"Failed parsing {cleaned}: {e}")
     
     if result_coords is None:
-      print(f"Giving up on '{cleaned}' after {MAX_GEOCODE_RETRIES} attempts; moving on.")
       continue
     
     results.append((result_coords.latitude, result_coords.longitude))
