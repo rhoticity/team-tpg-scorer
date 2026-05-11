@@ -427,16 +427,22 @@ for message in messages:
       continue
     other_player_name = get_player_name(mention)
 
+  print("other_player_name:", other_player_name)
   if other_player_name is None:
     pattern = r"<@(\d+)>"
     user_ids = re.findall(pattern, message_content)
     user_ids_int = [int(uid) for uid in user_ids]
+    print(user_ids_int)
 
     for user_id in user_ids_int:
+      print(user_id)
       user_name = player_name_map.get(user_id)
+      print(user_name)
+      print(player_name)
       if user_name is not None and user_name != player_name:
         other_player_name = user_name
-    
+
+  print("other_player_name:",other_player_name)
   if other_player_name is not None:
     coords = parse_coords(message_content)
   if len(message['attachments']) > 0 or has_image_embed(message) or len(message_snapshots) > 0 or len(stickers) > 0:
