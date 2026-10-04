@@ -28,7 +28,7 @@ DOC_KML_PATH = BASE_DIR / 'doc.kml'
 ASSETS_DIR = BASE_DIR
 
 
-channel_id = 1360751870381129868
+DISCORD_HEADERS = {"Authorization": "REDACTED"}
 start_messages = ["your teammate and decide what photos you are submitting"]
 start_users = ["pencilvulture", "rhoticity"]
 
@@ -44,6 +44,28 @@ def prompt_guild_id():
     print("Invalid server ID. Please enter a numeric Discord server ID.")
 
 
+def prompt_channel_id(guild_id):
+  """Prompt for a Discord channel belonging to the selected server."""
+  while True:
+    channel_id = input("Enter the Discord channel ID: ").strip()
+    if not (channel_id.isascii() and channel_id.isdecimal()):
+      print("Invalid channel ID. Please enter a numeric Discord channel ID.")
+      continue
+    try:
+      response = requests.get(
+        f"https://discord.com/api/v10/channels/{channel_id}",
+        headers=DISCORD_HEADERS, timeout=30)
+      response.raise_for_status()
+      channel = response.json()
+    except (requests.RequestException, ValueError):
+      print("Unable to retrieve channel. Check the channel ID and Discord access.")
+      continue
+    if channel.get('guild_id') != guild_id:
+      print("Channel does not belong to the selected server. Please try again.")
+      continue
+    return channel_id
+
+
 def prompt_mode():
   """Prompt the user to select scoring mode: 'auto' or 'historic'."""
   print("Select scoring mode:")
@@ -57,9 +79,7 @@ def prompt_mode():
 
 
 def get_messages():
-  headers = {
-    "Authorization" : "REDACTED"
-  }
+  headers = DISCORD_HEADERS
   found_start_message = False
   messages = []
   params = {}
@@ -96,9 +116,7 @@ def get_messages():
 
 def get_messages_historic(start_message_id, end_message_id):
   """Fetch messages between start_message_id (exclusive) and end_message_id (inclusive)."""
-  headers = {
-    "Authorization" : "REDACTED"
-  }
+  headers = DISCORD_HEADERS
   found_start_message = False
   messages = []
   params = {}
@@ -400,6 +418,7 @@ midpoints = []
 messages = []
 
 guild_id = prompt_guild_id()
+channel_id = prompt_channel_id(guild_id)
 scoring_mode = prompt_mode()
 if scoring_mode == "historic":
   start_id = input("Enter the start message ID (round start message): ").strip()
