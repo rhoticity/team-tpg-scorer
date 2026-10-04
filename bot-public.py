@@ -28,13 +28,21 @@ DOC_KML_PATH = BASE_DIR / 'doc.kml'
 ASSETS_DIR = BASE_DIR
 
 
-guild_id = 851583874768044052
 channel_id = 1360751870381129868
 start_messages = ["your teammate and decide what photos you are submitting"]
 start_users = ["pencilvulture", "rhoticity"]
 
 loc_coords = 38.579908, -104.309111
 start_messages.append(f"{loc_coords[0]}, {loc_coords[1]}")
+
+def prompt_guild_id():
+  """Prompt the user for the Discord server ID."""
+  while True:
+    server_id = input("Enter the Discord server ID: ").strip()
+    if server_id.isascii() and server_id.isdecimal():
+      return server_id
+    print("Invalid server ID. Please enter a numeric Discord server ID.")
+
 
 def prompt_mode():
   """Prompt the user to select scoring mode: 'auto' or 'historic'."""
@@ -391,6 +399,7 @@ midpoints = []
 
 messages = []
 
+guild_id = prompt_guild_id()
 scoring_mode = prompt_mode()
 if scoring_mode == "historic":
   start_id = input("Enter the start message ID (round start message): ").strip()
