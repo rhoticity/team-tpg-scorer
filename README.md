@@ -1,7 +1,7 @@
 # team-tpg-scorer
 
-Set `DISCORD_HEADERS` in `bot-public.py` to your Discord authorization header
-locally; do not commit credentials. At startup, enter the Discord server ID,
+Set the `DISCORD_TOKEN` environment variable to your Discord bot token locally;
+do not commit credentials. At startup, enter the Discord server ID,
 then the channel or thread ID (including forum posts). The script checks that
 the channel or thread belongs to that server (checking a thread's parent when
 needed) before selecting auto or historic scoring mode. Both modes fetch messages from

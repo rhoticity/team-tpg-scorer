@@ -29,18 +29,21 @@ DOC_KML_PATH = BASE_DIR / 'doc.kml'
 ASSETS_DIR = BASE_DIR
 
 
-# Discord bot token.
-# IMPORTANT: keep the real token out of GitHub.
-DISCORD_TOKEN = "YOUR_BOT_TOKEN_HERE"
+# Discord bot token; keep the real token out of GitHub.
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN", "").strip()
 
 DISCORD_HEADERS = {
-  "Authorization": f"Bot {DISCORD_TOKEN}",
+  "Authorization": f"Bot {DISCORD_TOKEN}" if DISCORD_TOKEN else "",
   "User-Agent": "TPG Scorer/1.0"
 }
 
 def test_discord_auth():
   """Verify that the configured credential is a valid Discord bot token."""
   print("\nTesting Discord authentication...")
+
+  if not DISCORD_TOKEN:
+    print("Discord authentication failed: set the DISCORD_TOKEN environment variable.")
+    return False
 
   try:
     response = requests.get(
@@ -57,41 +60,14 @@ def test_discord_auth():
   if response.ok:
     try:
       user = response.json()
-      print(
-        f"Authenticated successfully as: "
-        f"{user.get('username')} ({user.get('id')})"
-      )
     except (requests.RequestException, ValueError) as e:
-      status = response.status_code if response is not None else None
-
-      print("\nUnable to retrieve channel or thread.")
-      if status is not None:
-        print(f"HTTP status: {status}")
-
-      if response is not None:
-        print(f"Discord response: {response.text[:1000]}")
-
-      if status == 401:
-        print(
-          "HTTP 401 means Discord rejected the authentication credentials. "
-          "This is an authentication/token problem, not normally a "
-          "channel/thread permission problem."
-        )
-      elif status == 403:
-        print(
-          "HTTP 403 means the bot authenticated successfully but does not "
-          "have permission to access this channel/thread."
-        )
-      elif status == 404:
-        print(
-          "HTTP 404 means Discord could not find the channel/thread, or "
-          "the bot cannot access it."
-        )
-      else:
-        print(f"Request error: {e}")
-
+      print(f"Discord authentication response was invalid: {e}")
+      return False
+    if not isinstance(user, dict) or not user.get("username") or not user.get("id"):
+      print("Discord authentication response was malformed.")
       return False
 
+    print(f"Authenticated successfully as: {user['username']} ({user['id']})")
     return True
 
   print("Discord authentication FAILED.")
