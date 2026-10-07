@@ -168,7 +168,7 @@ def get_message_reactions(message_id):
     emoji_name = emoji.get('name') or emoji.get('id', '')
     emoji_parameter = emoji.get('name') or ''
     if emoji.get('id'):
-      emoji_parameter = f"{emoji_parameter}:{emoji['id']}".lstrip(':')
+      emoji_parameter = f"{emoji_parameter}:{emoji['id']}"
 
     users = []
     params = {'limit': 100}
