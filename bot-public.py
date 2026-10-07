@@ -11,6 +11,7 @@ from contextlib import suppress
 from pykml.factory import KML_ElementMaker as KML
 import json
 import requests
+from urllib.parse import quote
 from geopy.geocoders import ArcGIS
 import time
 import re
@@ -67,15 +68,16 @@ def prompt_channel_id(guild_id):
 
 
 def prompt_mode():
-  """Prompt the user to select scoring mode: 'auto' or 'historic'."""
+  """Prompt the user to select a mode."""
   print("Select scoring mode:")
   print("  auto     - automatically detect the current round from Discord")
   print("  historic - specify start/end message IDs for a historical round")
+  print("  reactions - list reactions to a Discord message")
   while True:
-    mode = input("Enter mode (auto/historic): ").strip().lower()
-    if mode in ("auto", "historic"):
+    mode = input("Enter mode (auto/historic/reactions): ").strip().lower()
+    if mode in ("auto", "historic", "reactions"):
       return mode
-    print("Invalid mode. Please enter 'auto' or 'historic'.")
+    print("Invalid mode. Please enter 'auto', 'historic', or 'reactions'.")
 
 
 def get_messages():
@@ -149,6 +151,43 @@ def get_messages_historic(start_message_id, end_message_id):
     json.dump(messages, f, ensure_ascii=False, indent=2)
 
   return messages
+
+
+def get_message_reactions(message_id):
+  """Return each reaction's emoji name and the usernames that used it."""
+  headers = DISCORD_HEADERS
+  response = requests.get(
+    f"https://discord.com/api/v10/channels/{channel_id}/messages/{message_id}",
+    headers=headers, timeout=30)
+  response.raise_for_status()
+  reactions = response.json().get('reactions', [])
+  results = []
+
+  for reaction in reactions:
+    emoji = reaction.get('emoji', {})
+    emoji_name = emoji.get('name') or emoji.get('id', '')
+    emoji_parameter = emoji.get('name') or ''
+    if emoji.get('id'):
+      emoji_parameter = f"{emoji_parameter}:{emoji['id']}"
+
+    users = {}
+    for reaction_type in (0, 1):
+      params = {'limit': 100, 'type': reaction_type}
+      while True:
+        response = requests.get(
+          f"https://discord.com/api/v10/channels/{channel_id}/messages/"
+          f"{message_id}/reactions/{quote(emoji_parameter, safe='')}",
+          headers=headers, params=params, timeout=30)
+        response.raise_for_status()
+        batch = response.json()
+        users.update((user['id'], user['username']) for user in batch)
+        if len(batch) < 100:
+          break
+        params['after'] = batch[-1]['id']
+
+    results.append((emoji_name, list(users.values())))
+
+  return results
 
 
 with open(DOC_KML_PATH, 'rb') as kml_file:
@@ -420,7 +459,14 @@ messages = []
 guild_id = prompt_guild_id()
 channel_id = prompt_channel_id(guild_id)
 scoring_mode = prompt_mode()
-if scoring_mode == "historic":
+if scoring_mode == "reactions":
+  message_id = input("Enter the Discord message ID: ").strip()
+  for emoji_name, usernames in get_message_reactions(message_id):
+    print(emoji_name)
+    for username in usernames:
+      print(username)
+  raise SystemExit
+elif scoring_mode == "historic":
   start_id = input("Enter the start message ID (round start message): ").strip()
   end_id = input("Enter the end message ID (round end message): ").strip()
   messages = get_messages_historic(start_id, end_id)
