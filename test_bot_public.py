@@ -3,13 +3,17 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
+from urllib.parse import quote
 from unittest.mock import Mock, mock_open, patch
 
 
 class DiscordChannelTests(unittest.TestCase):
   def setUp(self):
     self.tree = ast.parse(Path(__file__).with_name('bot-public.py').read_text())
-    functions = {'prompt_channel_id', 'get_messages', 'get_messages_historic'}
+    functions = {
+      'prompt_channel_id', 'prompt_mode', 'get_messages',
+      'get_messages_historic', 'get_message_reactions',
+    }
     nodes = [
       node for node in self.tree.body
       if isinstance(node, ast.FunctionDef) and node.name in functions
@@ -23,6 +27,7 @@ class DiscordChannelTests(unittest.TestCase):
       'requests': self.requests,
       'json': json,
       'time': SimpleNamespace(sleep=Mock()),
+      'quote': quote,
       'start_users': ['starter'],
       'start_messages': ['round start'],
     }
@@ -79,13 +84,50 @@ class DiscordChannelTests(unittest.TestCase):
         self.assertEqual(self.requests.get.call_args.kwargs['headers'],
                          self.namespace['DISCORD_HEADERS'])
 
+  def test_prompt_mode_accepts_reactions(self):
+    with patch('builtins.input', side_effect=['REactions']), \
+         patch('builtins.print'):
+      self.assertEqual(self.namespace['prompt_mode'](), 'reactions')
+
+  def test_get_message_reactions_lists_all_users_and_paginates(self):
+    self.namespace['channel_id'] = '456'
+    first_page = [{'id': str(i), 'username': f'user{i}'} for i in range(100)]
+    second_page = [{'id': '100', 'username': 'user100'}]
+    message = {'reactions': [
+      {'emoji': {'name': 'thumbs up', 'id': None}},
+      {'emoji': {'name': 'custom', 'id': '789'}},
+    ]}
+    self.requests.get.side_effect = [
+      Mock(json=Mock(return_value=message)),
+      Mock(json=Mock(return_value=first_page)),
+      Mock(json=Mock(return_value=second_page)),
+      Mock(json=Mock(return_value=[{'id': '101', 'username': 'custom-user'}])),
+    ]
+
+    reactions = self.namespace['get_message_reactions']('123')
+
+    self.assertEqual(reactions, [
+      ('thumbs up', [f'user{i}' for i in range(100)] + ['user100']),
+      ('custom', ['custom-user']),
+    ])
+    reaction_calls = self.requests.get.call_args_list[1:]
+    self.assertEqual(
+        reaction_calls[0].args[0],
+        'https://discord.com/api/v10/channels/456/messages/123/'
+        'reactions/thumbs%20up')
+    self.assertEqual(reaction_calls[1].kwargs['params'], {'limit': 100, 'after': '99'})
+    self.assertEqual(
+        reaction_calls[2].args[0],
+        'https://discord.com/api/v10/channels/456/messages/123/'
+        'reactions/custom%3A789')
+
   def test_startup_selects_channel_before_fetching(self):
     nodes = self.tree.body
     start = next(i for i, node in enumerate(nodes)
                  if isinstance(node, ast.Assign)
                  and any(isinstance(target, ast.Name) and target.id == 'guild_id'
                          for target in node.targets))
-    for mode in ('auto', 'historic'):
+    for mode in ('auto', 'historic', 'reactions'):
       with self.subTest(mode=mode):
         namespace = {
           'prompt_guild_id': Mock(return_value='123'),
@@ -93,14 +135,22 @@ class DiscordChannelTests(unittest.TestCase):
           'prompt_mode': Mock(return_value=mode),
           'get_messages': Mock(return_value=[]),
           'get_messages_historic': Mock(return_value=[]),
+          'get_message_reactions': Mock(return_value=[]),
         }
         with patch('builtins.input', side_effect=['10', '20']):
-          exec(compile(ast.Module(body=nodes[start:start + 4], type_ignores=[]),
-                       'bot-public.py', 'exec'), namespace)
+          if mode == 'reactions':
+            with self.assertRaises(SystemExit):
+              exec(compile(ast.Module(body=nodes[start:start + 5], type_ignores=[]),
+                           'bot-public.py', 'exec'), namespace)
+            namespace['get_message_reactions'].assert_called_once_with('10')
+          else:
+            exec(compile(ast.Module(body=nodes[start:start + 5], type_ignores=[]),
+                         'bot-public.py', 'exec'), namespace)
         namespace['prompt_channel_id'].assert_called_once_with('123')
         self.assertEqual(namespace['channel_id'], '456')
-        namespace['get_messages' if mode == 'auto' else
-                  'get_messages_historic'].assert_called_once()
+        if mode != 'reactions':
+          namespace['get_messages' if mode == 'auto' else
+                    'get_messages_historic'].assert_called_once()
 
   def test_links_use_selected_server_and_channel(self):
     node = next(node for node in ast.walk(self.tree)
