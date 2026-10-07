@@ -71,8 +71,9 @@ def prompt_channel_id(guild_id):
       status = response.status_code if response is not None else None
       guidance = {
         401: "Check the authorization header in DISCORD_HEADERS.",
-        403: "Ensure the account can view the parent channel and access the thread. "
-             "Private threads require membership or Manage Threads permission.",
+        403: "Ensure the account can view the requested channel or thread and, for "
+             "threads, its parent channel. Private threads require membership or "
+             "Manage Threads permission.",
         404: "Check the channel or thread ID and that the account has access to it.",
       }.get(status, "Check the channel or thread ID and Discord access.")
       status_text = (f" (HTTP {status})"
