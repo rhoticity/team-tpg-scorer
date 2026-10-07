@@ -56,6 +56,72 @@ class DiscordChannelTests(unittest.TestCase):
       self.assertEqual(self.namespace['prompt_channel_id']('123'), '456')
     self.assertEqual(self.requests.get.call_count, 3)
 
+  def test_select_thread_with_server_id(self):
+    for thread_type in (10, 11, 12):
+      with self.subTest(thread_type=thread_type):
+        self.requests.get.reset_mock()
+        self.requests.get.return_value = Mock(json=Mock(return_value={
+          'guild_id': '123', 'type': thread_type, 'parent_id': '789'}))
+        with patch('builtins.input', return_value='456'):
+          self.assertEqual(self.namespace['prompt_channel_id']('123'), '456')
+        self.requests.get.assert_called_once_with(
+          'https://discord.com/api/v10/channels/456',
+          headers=self.namespace['DISCORD_HEADERS'], timeout=30)
+
+  def test_select_thread_using_parent_server(self):
+    for thread_type in (10, 11, 12):
+      with self.subTest(thread_type=thread_type):
+        self.requests.get.reset_mock()
+        self.requests.get.side_effect = [
+          Mock(json=Mock(return_value={'type': thread_type, 'parent_id': '789'})),
+          self.response('123')]
+        with patch('builtins.input', return_value='456'):
+          self.assertEqual(self.namespace['prompt_channel_id']('123'), '456')
+        self.assertEqual(self.requests.get.call_args_list[0].args[0],
+                         'https://discord.com/api/v10/channels/456')
+        self.assertEqual(self.requests.get.call_args_list[1].args[0],
+                         'https://discord.com/api/v10/channels/789')
+        self.assertEqual(self.requests.get.call_args.kwargs,
+                         {'headers': self.namespace['DISCORD_HEADERS'], 'timeout': 30})
+
+  def test_reject_thread_from_another_server(self):
+    self.requests.get.side_effect = [
+      Mock(json=Mock(return_value={'type': 11, 'parent_id': '789'})),
+      self.response('999'), self.response('123')]
+    with patch('builtins.input', side_effect=['111', '456']), \
+         patch('builtins.print') as output:
+      self.assertEqual(self.namespace['prompt_channel_id']('123'), '456')
+    output.assert_called_once_with(
+      "Channel does not belong to the selected server. Please try again.")
+
+  def test_access_errors_explain_thread_requirements(self):
+    for status, guidance in [(401, 'DISCORD_HEADERS'), (403, 'Private threads'),
+                             (404, 'channel or thread ID')]:
+      for parent_lookup in (False, True):
+        with self.subTest(status=status, parent_lookup=parent_lookup):
+          failure = Mock(status_code=status)
+          failure.raise_for_status.side_effect = OSError('Access denied')
+          responses = [failure, self.response('123')]
+          if parent_lookup:
+            responses.insert(0, Mock(json=Mock(return_value={
+              'type': 12, 'parent_id': '789'})))
+          self.requests.get.side_effect = responses
+          with patch('builtins.input', side_effect=['111', '456']), \
+               patch('builtins.print') as output:
+            self.assertEqual(self.namespace['prompt_channel_id']('123'), '456')
+          message = output.call_args.args[0]
+          self.assertIn(f'HTTP {status}', message)
+          self.assertIn(guidance, message)
+
+  def test_retry_parent_connection_error_without_stale_status(self):
+    self.requests.get.side_effect = [
+      Mock(status_code=200, json=Mock(return_value={'type': 11, 'parent_id': '789'})),
+      OSError('Connection failed'), self.response('123')]
+    with patch('builtins.input', side_effect=['111', '456']), \
+         patch('builtins.print') as output:
+      self.assertEqual(self.namespace['prompt_channel_id']('123'), '456')
+    self.assertNotIn('HTTP 200', output.call_args.args[0])
+
   def test_retry_api_and_json_errors(self):
     forbidden = self.response('123')
     forbidden.raise_for_status.side_effect = OSError('Forbidden')

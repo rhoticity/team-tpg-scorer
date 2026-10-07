@@ -46,20 +46,37 @@ def prompt_guild_id():
 
 
 def prompt_channel_id(guild_id):
-  """Prompt for a Discord channel belonging to the selected server."""
+  """Prompt for a Discord channel or thread belonging to the selected server."""
   while True:
-    channel_id = input("Enter the Discord channel ID: ").strip()
+    channel_id = input("Enter the Discord channel or thread ID: ").strip()
     if not (channel_id.isascii() and channel_id.isdecimal()):
       print("Invalid channel ID. Please enter a numeric Discord channel ID.")
       continue
+    response = None
     try:
       response = requests.get(
         f"https://discord.com/api/v10/channels/{channel_id}",
         headers=DISCORD_HEADERS, timeout=30)
       response.raise_for_status()
       channel = response.json()
+      if (not channel.get('guild_id') and channel.get('type') in (10, 11, 12)
+          and channel.get('parent_id')):
+        response = None
+        response = requests.get(
+          f"https://discord.com/api/v10/channels/{channel['parent_id']}",
+          headers=DISCORD_HEADERS, timeout=30)
+        response.raise_for_status()
+        channel = response.json()
     except (requests.RequestException, ValueError):
-      print("Unable to retrieve channel. Check the channel ID and Discord access.")
+      status = response.status_code if response is not None else None
+      guidance = {
+        401: "Check the authorization header in DISCORD_HEADERS.",
+        403: "Ensure the account can view the parent channel and access the thread. "
+             "Private threads require membership or Manage Threads permission.",
+        404: "Check the channel or thread ID and that the account has access to it.",
+      }.get(status, "Check the channel or thread ID and Discord access.")
+      status_text = f" (HTTP {status})" if isinstance(status, int) else ""
+      print(f"Unable to retrieve channel or thread{status_text}. {guidance}")
       continue
     if channel.get('guild_id') != guild_id:
       print("Channel does not belong to the selected server. Please try again.")
