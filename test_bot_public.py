@@ -243,6 +243,25 @@ class DiscordChannelTests(unittest.TestCase):
     self.assertEqual(reaction_calls[4].kwargs['params'],
                     {'limit': 100, 'type': 1})
 
+  def test_startup_stops_when_discord_authentication_fails(self):
+    gate = next(node for node in self.tree.body
+                if isinstance(node, ast.If)
+                and isinstance(node.test, ast.UnaryOp)
+                and isinstance(node.test.op, ast.Not)
+                and isinstance(node.test.operand, ast.Call)
+                and isinstance(node.test.operand.func, ast.Name)
+                and node.test.operand.func.id == 'test_discord_auth')
+    auth = Mock(return_value=False)
+    namespace = {'test_discord_auth': auth}
+
+    with patch('builtins.print'):
+      with self.assertRaises(SystemExit) as exit_error:
+        exec(compile(ast.Module(body=[gate], type_ignores=[]),
+                     'bot-public.py', 'exec'), namespace)
+
+    self.assertEqual(exit_error.exception.code, 1)
+    auth.assert_called_once_with()
+
   def test_startup_selects_channel_before_fetching(self):
     nodes = self.tree.body
     start = next(i for i, node in enumerate(nodes)
