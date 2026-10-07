@@ -170,21 +170,22 @@ def get_message_reactions(message_id):
     if emoji.get('id'):
       emoji_parameter = f"{emoji_parameter}:{emoji['id']}"
 
-    users = []
-    params = {'limit': 100}
-    while True:
-      response = requests.get(
-        f"https://discord.com/api/v10/channels/{channel_id}/messages/"
-        f"{message_id}/reactions/{quote(emoji_parameter, safe='')}",
-        headers=headers, params=params, timeout=30)
-      response.raise_for_status()
-      batch = response.json()
-      users.extend(user['username'] for user in batch)
-      if len(batch) < 100:
-        break
-      params['after'] = batch[-1]['id']
+    users = {}
+    for reaction_type in (0, 1):
+      params = {'limit': 100, 'type': reaction_type}
+      while True:
+        response = requests.get(
+          f"https://discord.com/api/v10/channels/{channel_id}/messages/"
+          f"{message_id}/reactions/{quote(emoji_parameter, safe='')}",
+          headers=headers, params=params, timeout=30)
+        response.raise_for_status()
+        batch = response.json()
+        users.update((user['id'], user['username']) for user in batch)
+        if len(batch) < 100:
+          break
+        params['after'] = batch[-1]['id']
 
-    results.append((emoji_name, users))
+    results.append((emoji_name, list(users.values())))
 
   return results
 

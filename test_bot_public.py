@@ -101,13 +101,19 @@ class DiscordChannelTests(unittest.TestCase):
       Mock(json=Mock(return_value=message)),
       Mock(json=Mock(return_value=first_page)),
       Mock(json=Mock(return_value=second_page)),
+      Mock(json=Mock(return_value=[
+        {'id': '1', 'username': 'user1'},
+        {'id': '101', 'username': 'burst-user'},
+      ])),
       Mock(json=Mock(return_value=[{'id': '101', 'username': 'custom-user'}])),
+      Mock(json=Mock(return_value=[])),
     ]
 
     reactions = self.namespace['get_message_reactions']('123')
 
     self.assertEqual(reactions, [
-      ('thumbs up', [f'user{i}' for i in range(100)] + ['user100']),
+      ('thumbs up', [f'user{i}' for i in range(100)] +
+       ['user100', 'burst-user']),
       ('custom', ['custom-user']),
     ])
     reaction_calls = self.requests.get.call_args_list[1:]
@@ -115,11 +121,15 @@ class DiscordChannelTests(unittest.TestCase):
         reaction_calls[0].args[0],
         'https://discord.com/api/v10/channels/456/messages/123/'
         'reactions/thumbs%20up')
-    self.assertEqual(reaction_calls[1].kwargs['params'], {'limit': 100, 'after': '99'})
+    self.assertEqual(reaction_calls[1].kwargs['params'],
+                    {'limit': 100, 'type': 0, 'after': '99'})
+    self.assertEqual(reaction_calls[2].kwargs['params'], {'limit': 100, 'type': 1})
     self.assertEqual(
-        reaction_calls[2].args[0],
+        reaction_calls[3].args[0],
         'https://discord.com/api/v10/channels/456/messages/123/'
         'reactions/custom%3A789')
+    self.assertEqual(reaction_calls[4].kwargs['params'],
+                    {'limit': 100, 'type': 1})
 
   def test_startup_selects_channel_before_fetching(self):
     nodes = self.tree.body
