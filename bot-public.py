@@ -75,7 +75,8 @@ def prompt_channel_id(guild_id):
              "Private threads require membership or Manage Threads permission.",
         404: "Check the channel or thread ID and that the account has access to it.",
       }.get(status, "Check the channel or thread ID and Discord access.")
-      status_text = f" (HTTP {status})" if isinstance(status, int) else ""
+      status_text = (f" (HTTP {status})"
+                     if isinstance(status, int) and status >= 400 else "")
       print(f"Unable to retrieve channel or thread{status_text}. {guidance}")
       continue
     if channel.get('guild_id') != guild_id:
