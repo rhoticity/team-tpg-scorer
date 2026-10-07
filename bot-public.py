@@ -29,7 +29,75 @@ DOC_KML_PATH = BASE_DIR / 'doc.kml'
 ASSETS_DIR = BASE_DIR
 
 
-DISCORD_HEADERS = {"Authorization": "REDACTED"}
+# Discord bot token.
+# IMPORTANT: keep the real token out of GitHub.
+DISCORD_TOKEN = "YOUR_BOT_TOKEN_HERE"
+
+DISCORD_HEADERS = {
+  "Authorization": f"Bot {DISCORD_TOKEN}",
+  "User-Agent": "TPG Scorer/1.0"
+}
+
+def test_discord_auth():
+  """Verify that the configured credential is a valid Discord bot token."""
+  print("\nTesting Discord authentication...")
+
+  try:
+    response = requests.get(
+      "https://discord.com/api/v10/users/@me",
+      headers=DISCORD_HEADERS,
+      timeout=30
+    )
+  except requests.RequestException as e:
+    print(f"Discord authentication request failed: {e}")
+    return False
+
+  print(f"Auth test HTTP status: {response.status_code}")
+
+  if response.ok:
+    try:
+      user = response.json()
+      print(
+        f"Authenticated successfully as: "
+        f"{user.get('username')} ({user.get('id')})"
+      )
+    except (requests.RequestException, ValueError) as e:
+      status = response.status_code if response is not None else None
+
+      print("\nUnable to retrieve channel or thread.")
+      if status is not None:
+        print(f"HTTP status: {status}")
+
+      if response is not None:
+        print(f"Discord response: {response.text[:1000]}")
+
+      if status == 401:
+        print(
+          "HTTP 401 means Discord rejected the authentication credentials. "
+          "This is an authentication/token problem, not normally a "
+          "channel/thread permission problem."
+        )
+      elif status == 403:
+        print(
+          "HTTP 403 means the bot authenticated successfully but does not "
+          "have permission to access this channel/thread."
+        )
+      elif status == 404:
+        print(
+          "HTTP 404 means Discord could not find the channel/thread, or "
+          "the bot cannot access it."
+        )
+      else:
+        print(f"Request error: {e}")
+
+      continue
+
+    return True
+
+  print("Discord authentication FAILED.")
+  print(f"Discord response: {response.text[:1000]}")
+  return False
+
 start_messages = ["your teammate and decide what photos you are submitting"]
 start_users = ["pencilvulture", "rhoticity"]
 
@@ -474,6 +542,10 @@ geodesic_dist_map = {}
 midpoints = []
 
 messages = []
+
+if not test_discord_auth():
+  print("\nStopping because Discord authentication failed.")
+  raise SystemExit(1)
 
 guild_id = prompt_guild_id()
 channel_id = prompt_channel_id(guild_id)
