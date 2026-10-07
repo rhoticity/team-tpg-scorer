@@ -90,7 +90,7 @@ def test_discord_auth():
       else:
         print(f"Request error: {e}")
 
-      continue
+      return False
 
     return True
 
