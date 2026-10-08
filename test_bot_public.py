@@ -1,5 +1,6 @@
 import ast
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
@@ -11,14 +12,15 @@ class DiscordChannelTests(unittest.TestCase):
   def setUp(self):
     self.tree = ast.parse(Path(__file__).with_name('bot-public.py').read_text())
     functions = {
-      'prompt_channel_id', 'prompt_mode', 'get_messages',
+      'test_discord_auth', 'prompt_channel_id', 'prompt_mode', 'get_messages',
       'get_messages_historic', 'get_message_reactions',
     }
     nodes = [
       node for node in self.tree.body
       if isinstance(node, ast.FunctionDef) and node.name in functions
       or isinstance(node, ast.Assign)
-      and any(isinstance(target, ast.Name) and target.id == 'DISCORD_HEADERS'
+      and any(isinstance(target, ast.Name)
+              and target.id in {'DISCORD_TOKEN', 'DISCORD_HEADERS'}
               for target in node.targets)
     ]
     # Load the functions without running the top-level KML/scoring pipeline.
@@ -26,13 +28,57 @@ class DiscordChannelTests(unittest.TestCase):
     self.namespace = {
       'requests': self.requests,
       'json': json,
+      'os': os,
       'time': SimpleNamespace(sleep=Mock()),
       'quote': quote,
       'start_users': ['starter'],
       'start_messages': ['round start'],
     }
-    exec(compile(ast.Module(body=nodes, type_ignores=[]), 'bot-public.py', 'exec'),
-         self.namespace)
+    with patch.dict(os.environ, {'DISCORD_TOKEN': 'test-token'}):
+      exec(compile(ast.Module(body=nodes, type_ignores=[]), 'bot-public.py', 'exec'),
+           self.namespace)
+
+  def test_discord_auth_succeeds(self):
+    response = Mock(
+      status_code=200, ok=True,
+      json=Mock(return_value={'username': 'test-bot', 'id': '123'}))
+    self.requests.get.return_value = response
+
+    with patch('builtins.print'):
+      self.assertTrue(self.namespace['test_discord_auth']())
+
+    self.requests.get.assert_called_once_with(
+      'https://discord.com/api/v10/users/@me',
+      headers=self.namespace['DISCORD_HEADERS'], timeout=30)
+
+  def test_discord_auth_fails_without_token(self):
+    self.namespace['DISCORD_TOKEN'] = ''
+
+    with patch('builtins.print'):
+      self.assertFalse(self.namespace['test_discord_auth']())
+
+    self.requests.get.assert_not_called()
+
+  def test_discord_auth_fails_on_request_error(self):
+    self.requests.get.side_effect = OSError('Connection failed')
+
+    with patch('builtins.print'):
+      self.assertFalse(self.namespace['test_discord_auth']())
+
+  def test_discord_auth_fails_on_rejected_credentials(self):
+    self.requests.get.return_value = Mock(
+      status_code=401, ok=False, text='Unauthorized')
+
+    with patch('builtins.print'):
+      self.assertFalse(self.namespace['test_discord_auth']())
+
+  def test_discord_auth_fails_on_malformed_json(self):
+    self.requests.get.return_value = Mock(
+      status_code=200, ok=True,
+      json=Mock(side_effect=ValueError('Invalid JSON')))
+
+    with patch('builtins.print'):
+      self.assertFalse(self.namespace['test_discord_auth']())
 
   def response(self, guild_id):
     return Mock(json=Mock(return_value={'guild_id': guild_id}))
@@ -95,7 +141,7 @@ class DiscordChannelTests(unittest.TestCase):
       "Channel does not belong to the selected server. Please try again.")
 
   def test_access_errors_explain_thread_requirements(self):
-    for status, guidance in [(401, 'DISCORD_HEADERS'), (403, 'Private threads'),
+    for status, guidance in [(401, 'DISCORD_TOKEN'), (403, 'Private threads'),
                              (404, 'channel or thread ID')]:
       for parent_lookup in (False, True):
         with self.subTest(status=status, parent_lookup=parent_lookup):
@@ -112,6 +158,8 @@ class DiscordChannelTests(unittest.TestCase):
           message = output.call_args.args[0]
           self.assertIn(f'HTTP {status}', message)
           self.assertIn(guidance, message)
+          if status == 401:
+            self.assertNotIn('DISCORD_HEADERS', message)
 
   def test_retry_parent_connection_error_without_stale_status(self):
     self.requests.get.side_effect = [
@@ -196,6 +244,25 @@ class DiscordChannelTests(unittest.TestCase):
         'reactions/custom%3A789')
     self.assertEqual(reaction_calls[4].kwargs['params'],
                     {'limit': 100, 'type': 1})
+
+  def test_startup_stops_when_discord_authentication_fails(self):
+    gate = next(node for node in self.tree.body
+                if isinstance(node, ast.If)
+                and isinstance(node.test, ast.UnaryOp)
+                and isinstance(node.test.op, ast.Not)
+                and isinstance(node.test.operand, ast.Call)
+                and isinstance(node.test.operand.func, ast.Name)
+                and node.test.operand.func.id == 'test_discord_auth')
+    auth = Mock(return_value=False)
+    namespace = {'test_discord_auth': auth}
+
+    with patch('builtins.print'):
+      with self.assertRaises(SystemExit) as exit_error:
+        exec(compile(ast.Module(body=[gate], type_ignores=[]),
+                     'bot-public.py', 'exec'), namespace)
+
+    self.assertEqual(exit_error.exception.code, 1)
+    auth.assert_called_once_with()
 
   def test_startup_selects_channel_before_fetching(self):
     nodes = self.tree.body

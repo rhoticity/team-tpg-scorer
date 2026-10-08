@@ -29,7 +29,51 @@ DOC_KML_PATH = BASE_DIR / 'doc.kml'
 ASSETS_DIR = BASE_DIR
 
 
-DISCORD_HEADERS = {"Authorization": "REDACTED"}
+# Discord bot token; keep the real token out of GitHub.
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN", "").strip()
+
+DISCORD_HEADERS = {
+  "Authorization": f"Bot {DISCORD_TOKEN}" if DISCORD_TOKEN else "",
+  "User-Agent": "TPG Scorer/1.0"
+}
+
+def test_discord_auth():
+  """Verify that the configured credential is a valid Discord bot token."""
+  print("\nTesting Discord authentication...")
+
+  if not DISCORD_TOKEN:
+    print("Discord authentication failed: set the DISCORD_TOKEN environment variable.")
+    return False
+
+  try:
+    response = requests.get(
+      "https://discord.com/api/v10/users/@me",
+      headers=DISCORD_HEADERS,
+      timeout=30
+    )
+  except requests.RequestException as e:
+    print(f"Discord authentication request failed: {e}")
+    return False
+
+  print(f"Auth test HTTP status: {response.status_code}")
+
+  if response.ok:
+    try:
+      user = response.json()
+    except (requests.RequestException, ValueError) as e:
+      print(f"Discord authentication response was invalid: {e}")
+      return False
+    if not isinstance(user, dict) or not user.get("username") or not user.get("id"):
+      print("Discord authentication response was malformed.")
+      return False
+
+    print(f"Authenticated successfully as: {user['username']} ({user['id']})")
+    return True
+
+  print("Discord authentication FAILED.")
+  print(f"Discord response: {response.text[:1000]}")
+  return False
+
 start_messages = ["your teammate and decide what photos you are submitting"]
 start_users = ["pencilvulture", "rhoticity"]
 
@@ -70,7 +114,7 @@ def prompt_channel_id(guild_id):
     except (requests.RequestException, ValueError):
       status = response.status_code if response is not None else None
       guidance = {
-        401: "Check the authorization header in DISCORD_HEADERS.",
+        401: "Check the Discord bot token in the DISCORD_TOKEN environment variable.",
         403: "Ensure the account can view the requested channel or thread and, for "
              "threads, its parent channel. Private threads require membership or "
              "Manage Threads permission.",
@@ -474,6 +518,10 @@ geodesic_dist_map = {}
 midpoints = []
 
 messages = []
+
+if not test_discord_auth():
+  print("\nStopping because Discord authentication failed.")
+  raise SystemExit(1)
 
 guild_id = prompt_guild_id()
 channel_id = prompt_channel_id(guild_id)
