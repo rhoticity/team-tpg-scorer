@@ -114,7 +114,7 @@ def prompt_channel_id(guild_id):
     except (requests.RequestException, ValueError):
       status = response.status_code if response is not None else None
       guidance = {
-        401: "Check the authorization header in DISCORD_HEADERS.",
+        401: "Check the Discord bot token in the DISCORD_TOKEN environment variable.",
         403: "Ensure the account can view the requested channel or thread and, for "
              "threads, its parent channel. Private threads require membership or "
              "Manage Threads permission.",

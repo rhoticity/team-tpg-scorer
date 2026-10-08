@@ -141,7 +141,7 @@ class DiscordChannelTests(unittest.TestCase):
       "Channel does not belong to the selected server. Please try again.")
 
   def test_access_errors_explain_thread_requirements(self):
-    for status, guidance in [(401, 'DISCORD_HEADERS'), (403, 'Private threads'),
+    for status, guidance in [(401, 'DISCORD_TOKEN'), (403, 'Private threads'),
                              (404, 'channel or thread ID')]:
       for parent_lookup in (False, True):
         with self.subTest(status=status, parent_lookup=parent_lookup):
@@ -158,6 +158,8 @@ class DiscordChannelTests(unittest.TestCase):
           message = output.call_args.args[0]
           self.assertIn(f'HTTP {status}', message)
           self.assertIn(guidance, message)
+          if status == 401:
+            self.assertNotIn('DISCORD_HEADERS', message)
 
   def test_retry_parent_connection_error_without_stale_status(self):
     self.requests.get.side_effect = [

@@ -12,7 +12,7 @@ ID, not its parent channel's ID. The authorized account must be able to view the
 parent channel and access the thread, with Read Message History to read messages.
 Private threads require membership or Manage Threads permission.
 If lookup fails, the script reports the HTTP status when available: 401 means
-check `DISCORD_HEADERS`, 403 means check permissions, and 404 means check the
+check `DISCORD_TOKEN`, 403 means check permissions, and 404 means check the
 ID and account access. The script cannot bypass Discord access restrictions.
 
 Choose `reactions` to enter a Discord message ID and print each reaction's emoji
