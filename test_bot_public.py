@@ -12,7 +12,8 @@ class DiscordChannelTests(unittest.TestCase):
   def setUp(self):
     self.tree = ast.parse(Path(__file__).with_name('bot-public.py').read_text())
     functions = {
-      'test_discord_auth', 'prompt_channel_id', 'prompt_mode', 'get_messages',
+      'test_discord_auth', 'troubleshoot_thread_access', 'prompt_channel_id',
+      'prompt_mode', 'get_messages',
       'get_messages_historic', 'get_message_reactions',
     }
     nodes = [
@@ -152,14 +153,81 @@ class DiscordChannelTests(unittest.TestCase):
             responses.insert(0, Mock(json=Mock(return_value={
               'type': 12, 'parent_id': '789'})))
           self.requests.get.side_effect = responses
-          with patch('builtins.input', side_effect=['111', '456']), \
+          inputs = ['111', '456']
+          if status == 403 and not parent_lookup:
+            inputs.insert(1, '')
+          with patch('builtins.input', side_effect=inputs), \
                patch('builtins.print') as output:
             self.assertEqual(self.namespace['prompt_channel_id']('123'), '456')
-          message = output.call_args.args[0]
+          message = '\n'.join(call.args[0] for call in output.call_args_list)
           self.assertIn(f'HTTP {status}', message)
           self.assertIn(guidance, message)
           if status == 401:
             self.assertNotIn('DISCORD_HEADERS', message)
+
+  def test_forbidden_thread_can_probe_parent_and_retry(self):
+    failure = Mock(status_code=403, json=Mock(return_value={
+      'code': 50001, 'message': 'Missing Access'}))
+    failure.raise_for_status.side_effect = OSError('Forbidden')
+    self.requests.get.side_effect = [
+      failure, self.response('123'), self.response('123')]
+    with patch('builtins.input', side_effect=['111', '789', '456']), \
+         patch('builtins.print') as output:
+      self.assertEqual(self.namespace['prompt_channel_id']('123'), '456')
+    message = '\n'.join(call.args[0] for call in output.call_args_list)
+    self.assertIn('50001 (Missing Access)', message)
+    self.assertIn('not your personal Discord account', message)
+    self.assertIn('role and member overrides', message)
+    self.assertIn('The bot can retrieve this parent channel', message)
+    self.requests.get.assert_any_call(
+      'https://discord.com/api/v10/channels/789',
+      headers=self.namespace['DISCORD_HEADERS'], timeout=30)
+
+  def test_parent_probe_reports_errors_and_wrong_server(self):
+    forbidden = Mock(status_code=403)
+    forbidden.raise_for_status.side_effect = OSError('Forbidden')
+    cases = [
+      (forbidden, 'Parent access check failed'),
+      (OSError('Connection failed'), 'Parent access check failed'),
+      (Mock(status_code=200, json=Mock(side_effect=ValueError('Invalid JSON'))),
+       'Parent access check failed'),
+      (self.response('999'), 'does not belong to the selected server'),
+      (Mock(json=Mock(return_value={'guild_id': '123', 'type': 11})),
+       'That ID is another thread'),
+    ]
+    for response, expected in cases:
+      with self.subTest(expected=expected):
+        self.requests.get.side_effect = [response]
+        with patch('builtins.input', return_value='789'), \
+             patch('builtins.print') as output:
+          self.namespace['troubleshoot_thread_access'](
+            Mock(json=Mock(return_value={'code': 50013})), '123')
+        message = '\n'.join(call.args[0] for call in output.call_args_list)
+        self.assertIn('50013 (Missing Permissions)', message)
+        self.assertIn(expected, message)
+
+  def test_diagnostics_skip_invalid_parent_and_malformed_error(self):
+    for parent_id in ('', 'abc', '１２３'):
+      for error in (ValueError('Invalid JSON'), ['not an error object']):
+        with self.subTest(parent_id=parent_id, error=error):
+          self.requests.get.reset_mock()
+          response = Mock()
+          if isinstance(error, ValueError):
+            response.json.side_effect = error
+          else:
+            response.json.return_value = error
+          with patch('builtins.input', return_value=parent_id), \
+               patch('builtins.print'):
+            self.namespace['troubleshoot_thread_access'](response, '123')
+          self.requests.get.assert_not_called()
+
+  def test_failed_known_parent_does_not_prompt_or_probe_again(self):
+    with patch('builtins.input') as prompt, patch('builtins.print') as output:
+      self.namespace['troubleshoot_thread_access'](
+        Mock(json=Mock(return_value={})), '123', '789')
+    prompt.assert_not_called()
+    self.requests.get.assert_not_called()
+    self.assertIn('parent channel 789, not the thread', output.call_args.args[0])
 
   def test_retry_parent_connection_error_without_stale_status(self):
     self.requests.get.side_effect = [
