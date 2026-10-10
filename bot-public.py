@@ -89,6 +89,55 @@ def prompt_guild_id():
     print("Invalid server ID. Please enter a numeric Discord server ID.")
 
 
+def troubleshoot_thread_access(response, guild_id, parent_id=None):
+  """Explain a forbidden lookup and optionally check the thread's parent."""
+  try:
+    error = response.json()
+  except (requests.RequestException, ValueError):
+    error = None
+  if isinstance(error, dict) and isinstance(error.get('code'), int):
+    code = error['code']
+    meaning = {50001: "Missing Access", 50013: "Missing Permissions"}.get(
+      code, "see Discord API error codes")
+    print(f"Discord error code: {code} ({meaning}).")
+  print("The authenticated identity is the bot shown above, not your personal "
+        "Discord account. Successful authentication does not prove channel access.")
+  print("For public threads and forum posts, check the bot's View Channel "
+        "permission on the parent channel, including role and member overrides. "
+        "Read Message History is also needed to fetch messages. Private threads "
+        "additionally require membership or Manage Threads permission.")
+  if parent_id:
+    print(f"The failed lookup was for parent channel {parent_id}, not the thread.")
+    return
+  parent_id = input(
+    "Optional: enter the thread's parent channel ID to test bot access "
+    "(Enter to skip): ").strip()
+  if not parent_id:
+    return
+  if not (parent_id.isascii() and parent_id.isdecimal()):
+    print("Invalid parent channel ID. Skipping parent access check.")
+    return
+  try:
+    parent_response = requests.get(
+      f"https://discord.com/api/v10/channels/{parent_id}",
+      headers=DISCORD_HEADERS, timeout=30)
+    print(f"Parent channel lookup HTTP status: {parent_response.status_code}")
+    parent_response.raise_for_status()
+    parent = parent_response.json()
+    if not isinstance(parent, dict) or parent.get('guild_id') != guild_id:
+      print("Parent channel does not belong to the selected server. Check its ID.")
+    elif parent.get('type') in (10, 11, 12):
+      print("That ID is another thread. Enter the containing channel's ID instead.")
+    else:
+      print("The bot can retrieve this parent channel. Confirm it is the target "
+            "thread's actual parent, then check the thread ID and any private "
+            "thread membership. Parent lookup alone does not prove message access.")
+  except (requests.RequestException, ValueError):
+    print("Parent access check failed. Check the parent ID and the bot's "
+          "server membership and View Channel overrides; this is not a "
+          "private-thread membership test.")
+
+
 def prompt_channel_id(guild_id):
   """Prompt for a Discord channel or thread belonging to the selected server."""
   while True:
@@ -97,6 +146,7 @@ def prompt_channel_id(guild_id):
       print("Invalid channel ID. Please enter a numeric Discord channel ID.")
       continue
     response = None
+    parent_id = None
     try:
       response = requests.get(
         f"https://discord.com/api/v10/channels/{channel_id}",
@@ -105,6 +155,7 @@ def prompt_channel_id(guild_id):
       channel = response.json()
       if (not channel.get('guild_id') and channel.get('type') in (10, 11, 12)
           and channel.get('parent_id')):
+        parent_id = channel['parent_id']
         response = None
         response = requests.get(
           f"https://discord.com/api/v10/channels/{channel['parent_id']}",
@@ -123,6 +174,8 @@ def prompt_channel_id(guild_id):
       status_text = (f" (HTTP {status})"
                      if isinstance(status, int) and status >= 400 else "")
       print(f"Unable to retrieve channel or thread{status_text}. {guidance}")
+      if status == 403:
+        troubleshoot_thread_access(response, guild_id, parent_id)
       continue
     if channel.get('guild_id') != guild_id:
       print("Channel does not belong to the selected server. Please try again.")
