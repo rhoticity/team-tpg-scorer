@@ -266,6 +266,41 @@ class DiscordChannelTests(unittest.TestCase):
         self.assertEqual(self.requests.get.call_args.kwargs['headers'],
                          self.namespace['DISCORD_HEADERS'])
 
+  def test_auto_mode_stops_at_any_configured_marker_from_a_start_user(self):
+    self.namespace['channel_id'] = '456'
+    self.namespace['start_messages'] = ['round start', '38.579908, -104.309111']
+    messages = [
+      {'id': '30', 'author': {'username': 'player'}, 'content': 'current submission'},
+      {'id': '20', 'author': {'username': 'other'}, 'content': 'round start'},
+      {'id': '15', 'author': {'username': 'starter'}, 'content': '38.579908, -104.309111'},
+      {'id': '10', 'author': {'username': 'player'}, 'content': 'old submission'},
+    ]
+    self.requests.get.return_value = Mock(
+      status_code=200, text=json.dumps(messages))
+
+    with patch('builtins.open', mock_open()), patch('builtins.print'), \
+         patch('time.sleep'):
+      result = self.namespace['get_messages']()
+
+    self.assertEqual(result, list(reversed(messages[:2])))
+    self.requests.get.assert_called_once()
+
+  def test_auto_mode_returns_no_messages_when_start_marker_is_not_found(self):
+    self.namespace['channel_id'] = '456'
+    self.requests.get.side_effect = [
+      Mock(status_code=200, text=json.dumps([
+        {'id': '20', 'author': {'username': 'player'}, 'content': 'old submission'},
+      ])),
+      Mock(status_code=200, text='[]'),
+    ]
+
+    with patch('builtins.open', mock_open()), patch('builtins.print'), \
+         patch('time.sleep'):
+      result = self.namespace['get_messages']()
+
+    self.assertEqual(result, [])
+    self.assertEqual(self.requests.get.call_count, 2)
+
   def test_prompt_mode_accepts_reactions(self):
     with patch('builtins.input', side_effect=['REactions']), \
          patch('builtins.print'):
