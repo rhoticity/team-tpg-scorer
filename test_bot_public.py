@@ -287,14 +287,19 @@ class DiscordChannelTests(unittest.TestCase):
 
   def test_auto_mode_returns_no_messages_when_start_marker_is_not_found(self):
     self.namespace['channel_id'] = '456'
-    self.requests.get.return_value = Mock(status_code=200, text='[]')
+    self.requests.get.side_effect = [
+      Mock(status_code=200, text=json.dumps([
+        {'id': '20', 'author': {'username': 'player'}, 'content': 'old submission'},
+      ])),
+      Mock(status_code=200, text='[]'),
+    ]
 
     with patch('builtins.open', mock_open()), patch('builtins.print'), \
          patch('time.sleep'):
       result = self.namespace['get_messages']()
 
     self.assertEqual(result, [])
-    self.requests.get.assert_called_once()
+    self.assertEqual(self.requests.get.call_count, 2)
 
   def test_prompt_mode_accepts_reactions(self):
     with patch('builtins.input', side_effect=['REactions']), \
