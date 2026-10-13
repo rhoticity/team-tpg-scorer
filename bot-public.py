@@ -211,19 +211,24 @@ def get_messages():
     print("body:", r.text[:500])
     time.sleep(1)
 
-    for m in json.loads(r.text):
+    batch = json.loads(r.text)
+    if not batch:
+      break
+
+    for m in batch:
       last_message_id = m['id']
-      if m['author']['username'] in start_users:
-        if all(start_message.lower() in m['content'].lower() for start_message in start_messages):
-          found_start_message = True
-        elif start_messages[0].lower() in m['content'].lower():
-          messages = []
+      if (m['author']['username'] in start_users
+          and any(start_message.lower() in m['content'].lower()
+                  for start_message in start_messages)):
+        found_start_message = True
 
       if found_start_message:
         break
-      else:
-        messages.append(m)
+      messages.append(m)
 
+  if not found_start_message:
+    print("No round-start message found; no messages will be scored.")
+    messages = []
   messages.reverse()
 
   with open('messages.json', 'w', encoding='utf-8') as f:
