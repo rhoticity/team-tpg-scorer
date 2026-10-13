@@ -272,7 +272,7 @@ class DiscordChannelTests(unittest.TestCase):
     messages = [
       {'id': '30', 'author': {'username': 'player'}, 'content': 'current submission'},
       {'id': '20', 'author': {'username': 'other'}, 'content': 'round start'},
-      {'id': '15', 'author': {'username': 'starter'}, 'content': 'round start'},
+      {'id': '15', 'author': {'username': 'starter'}, 'content': '38.579908, -104.309111'}
       {'id': '10', 'author': {'username': 'player'}, 'content': 'old submission'},
     ]
     self.requests.get.return_value = Mock(
